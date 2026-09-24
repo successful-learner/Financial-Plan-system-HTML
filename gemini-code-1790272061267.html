@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多家庭成員與綜合財務規劃室</title>
+<style>
+:root{
+  --bg:#f3f6fb;--card:#fff;--ink:#17243b;--muted:#627087;
+  --line:#dfe6ef;--brand:#215ae8;--good:#087f65;
+  --bad:#b93845;--soft:#eaf0ff;--radius:16px;--warn:#d97706
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;
+  line-height:1.6
+}
+header{
+  background:linear-gradient(120deg,#102441,#254cb0);
+  color:white;padding:24px max(20px,calc((100vw - 1240px)/2))
+}
+header h1{margin:0;font-size:24px}
+header p{margin:4px 0 12px;opacity:.85;font-size:14px}
+button,.button{
+  font:inherit;border:1px solid var(--line);background:white;color:var(--ink);
+  border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px
+}
+button:hover,.button:hover{filter:brightness(.96)}
+button.primary{background:var(--brand);color:white;border-color:var(--brand)}
+button.danger{color:var(--bad);border-color:#fca5a5}
+button.warn{color:var(--warn);border-color:#fcd34d}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#saveStatus{font-size:12px;color:#dbe6ff;margin-left:8px}
+
+.member-bar{
+  background:#1a365d;color:white;padding:12px max(20px,calc((100vw - 1240px)/2));
+  display:flex;gap:20px;align-items:center;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,0.1);
+  font-size:14px
+}
+.member-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.member-bar select{width:auto;padding:5px 10px;background:white;color:#1d2d42;font-weight:600;border-radius:6px}
+.checkbox-group{display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.1);padding:6px 14px;border-radius:8px}
+
+nav{
+  position:sticky;top:0;z-index:5;background:#ffffffed;
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)
+}
+.tabs{
+  max-width:1280px;margin:auto;display:flex;gap:6px;
+  padding:10px 20px;overflow:auto
+}
+.tabs button{white-space:nowrap;border-color:transparent}
+.tabs button.active{background:var(--soft);color:var(--brand);font-weight:700}
+main{max-width:1280px;margin:20px auto;padding:0 20px 50px}
+.page{display:none}
+.page.active{display:block}
+.card{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:20px;margin-bottom:18px
+}
+h2{font-size:20px;margin:0 0 12px}
+h3{font-size:16px;margin:14px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+label.field{display:flex;flex-direction:column;gap:5px;font-size:13px}
+input,select,textarea{
+  width:100%;min-width:0;border:1px solid #cad4e3;border-radius:8px;
+  padding:8px 10px;background:white;color:var(--ink);font:inherit
+}
+textarea{resize:vertical;min-height:38px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:14px;background:white}
+.kpi .label{font-size:12px;color:var(--muted)}
+.kpi .value{font-size:22px;font-weight:750;margin:4px 0;overflow-wrap:anywhere}
+.kpi .sub{font-size:11px;color:var(--muted)}
+.good{color:var(--good)}
+.bad{color:var(--bad)}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{background:#f5f7fc;color:#536179;font-size:12px}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:0}
+td input,td select,td textarea{min-width:110px}
+td input[type=text]{min-width:130px}
+.owner-tag{
+  display:inline-block;padding:2px 8px;background:var(--soft);color:var(--brand);
+  border-radius:6px;font-size:11px;font-weight:600
+}
+.bar-row{display:grid;grid-template-columns:110px 1fr 120px;gap:12px;align-items:center;margin:10px 0;font-size:13px}
+.bar{height:10px;border-radius:10px;background:#e7edf6;overflow:hidden}
+.bar i{display:block;background:#215ae8;height:100%}
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+</head>
+<body>
+
+<script>
+  // 請在此處貼上你的 Google Apps Script 網頁應用程式部署 URL
+  const GAS_API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+</script>
+
+<header>
+  <h1>我的全方位家庭與個人財務規劃室</h1>
+  <p>支援多成員管理・動態組合檢視・Google Drive 雲端同步</p>
+  <div class="toolbar">
+    <button id="saveDriveBtn" class="primary">☁️ 雲端同步/儲存 (Google Drive)</button>
+    <button id="loadDriveBtn">🔄 從雲端讀取 (Drive)</button>
+    <button id="resetBtn" class="danger">重設預設資料</button>
+    <span id="saveStatus"></span>
+  </div>
+</header>
+
+<!-- 成員管理區 -->
+<div class="member-bar">
+  <div class="member-controls">
+    <label>👤 目前新增/編輯成員：</label>
+    <select id="memberSelect"></select>
+    <button id="renameMemberBtn">✏️ 改名</button>
+    <button id="addMemberBtn">+ 新增</button>
+    <button id="deleteMemberBtn" class="danger">🗑️ 刪除成員</button>
+    <select id="trashSelect" style="display:none;margin-left:10px"></select>
+    <button id="restoreMemberBtn" class="warn" style="display:none">♻️ 復原成員</button>
+  </div>
+  <div class="checkbox-group">
+    <label>📊 顯示與加總成員 (已勾選項目會同步於下方所有頁面顯示)：</label>
+    <div id="combinationCheckboxes" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<nav>
+  <div class="tabs" role="tablist">
+    <button class="active" data-tab="dashboard">📊 綜合總覽概覽</button>
+    <button data-tab="properties">🏠 物業/按揭組合</button>
+    <button data-tab="stocks">📈 股票投資組合</button>
+    <button data-tab="cashflow">💵 收入與生意</button>
+    <button data-tab="expenses">💳 生活費與支出</button>
+    <button data-tab="insurance">🛡️ 保險與保障</button>
+    <button data-tab="fire">🔥 財務自由 (FIRE)</button>
+  </div>
+</nav>
+
+<main>
+<!-- 1. 綜合總覽概覽 -->
+<section id="dashboard" class="page active">
+  <div class="card">
+    <h2 id="summaryTitle">整體資產淨值概覽</h2>
+    <div id="summaryKPIs" class="kpis"></div>
+  </div>
+
+  <div class="grid two">
+    <div class="card">
+      <h2>每月總現金流 (Monthly Cashflow)</h2>
+      <div id="cashflowKPIs" class="kpis" style="grid-template-columns:1fr 1fr"></div>
+      <h3 style="margin-top:20px">收支佔比</h3>
+      <div id="cashflowBars"></div>
+    </div>
+    <div class="card">
+      <h2>資產組合分佈 (Assets Distribution)</h2>
+      <div id="assetBars"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. 多物業按揭 -->
+<section id="properties" class="page">
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">物業與按揭列表</h2>
+      <button id="addPropertyBtn" class="primary">＋ 新增物業 (加入至當前成員)</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">提示：列表中會顯示所有已被勾選成員的物業數據。</p>
+    <div id="propertyTable" class="table-wrap"></div>
+  </div>
+</section>
+
+<!-- 3. 多股票投資 -->
+<section id="stocks" class="page">
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">股票 / 基金組合</h2>
+      <button id="addStockBtn" class="primary">＋ 新增股票 / 基金 (加入至當前成員)</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">提示：列表中會顯示所有已被勾選成員的股票組合。</p>
+    <div id="stockTable" class="table-wrap"></div>
+  </div>
+</section>
+
+<!-- 4. 多重收入與生意 -->
+<section id="cashflow" class="page">
+  <div class="card">
+    <h2>現金與其他存款</h2>
+    <div id="cashBalancesContainer" class="grid" style="grid-template-columns:repeat(auto-fill, minmax(220px, 1fr))"></div>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">收入來源</h2>
+      <button id="addIncomeBtn" class="primary">＋ 新增收入項目 (加入至當前成員)</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">提示：列表中會顯示所有已被勾選成員的收入項目。</p>
+    <div id="incomeTable" class="table-wrap"></div>
+  </div>
+</section>
+
+<!-- 5. 生活費與支出 -->
+<section id="expenses" class="page">
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">日常生活支出項目</h2>
+      <button id="addExpenseBtn" class="primary">＋ 新增支出項目 (加入至當前成員)</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">提示：列表中會顯示所有已被勾選成員的支出項目。</p>
+    <div id="expenseTable" class="table-wrap"></div>
+  </div>
+</section>
+
+<!-- 6. 保險 (正規化) -->
+<section id="insurance" class="page">
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">保單與保障明細 (正規化管理)</h2>
+      <button id="addPolicyBtn" class="primary">＋ 新增保單 (加入至當前成員)</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">提示：支援記錄保險公司、保單類型、受保人及用途/細節備註。</p>
+    <div id="policyTable" class="table-wrap"></div>
+  </div>
+</section>
+
+<!-- 7. FIRE 財務自由 -->
+<section id="fire" class="page">
+  <div class="card">
+    <h2>財務自由目標 (FIRE Calculator)</h2>
+    <div class="grid">
+      <label class="field">
+        假設每年安全提取率 (Safe Withdrawal Rate %)
+        <input id="fireSWR" type="number" value="4" min="0.1" max="10" step="0.1">
+      </label>
+    </div>
+  </div>
+  <div id="fireSummary" class="kpis"></div>
+</section>
+</main>
+
+<script>
+"use strict";
+(function() {
+const $ = id => document.getElementById(id);
+const KEY = "multi_member_finance_planner_v3";
+
+function createDefaultMember(name) {
+  return {
+    cash: 300000,
+    properties: [{ name: name + " 的首置物業", price: 5000000, mortgageLoan: 2000000, pmt: 10000, rent: 0 }],
+    stocks: [{ name: "盈富基金 (2800)", initial: 100000, monthly: 3000, divYield: 3.5, priceGrowth: 4 }],
+    incomes: [{ name: "主要薪金", category: "active", amount: 35000 }],
+    expenses: [{ name: "基本生活開支", amount: 12000 }],
+    policies: [{ name: "危疾保障計劃", company: "友邦 (AIA)", type: "重疾險", insured: name, premium: 1200, freq: "monthly", desc: "涵蓋 58 種重疾，含人壽及儲蓄成分" }]
+  };
+}
+
+const defaultRootData = {
+  activeMember: "戶主 A",
+  selectedMembersForView: ["戶主 A", "配偶 B"],
+  members: {
+    "戶主 A": createDefaultMember("戶主 A"),
+    "配偶 B": createDefaultMember("配偶 B")
+  },
+  trash: {} // 回收桶: 儲存被刪除的成員 profile
+};
+
+let DB = loadData();
+
+function loadData() {
+  const saved = localStorage.getItem(KEY);
+  if (saved) {
+    try { 
+      const parsed = JSON.parse(saved);
+      if (!parsed.trash) parsed.trash = {};
+      return parsed;
+    } catch(e){}
+  }
+  return JSON.parse(JSON.stringify(defaultRootData));
+}
+
+function saveData() {
+  localStorage.setItem(KEY, JSON.stringify(DB));
+}
+
+function money(v) {
+  if (!Number.isFinite(v)) return "$0";
+  return new Intl.NumberFormat("zh-HK", { style: "currency", currency: "HKD", maximumFractionDigits: 0 }).format(v);
+}
+
+// 取得目前選擇的編輯成員數據
+function getActiveMemberData() {
+  if (!DB.members[DB.activeMember]) {
+    const keys = Object.keys(DB.members);
+    if (keys.length > 0) DB.activeMember = keys[0];
+  }
+  return DB.members[DB.activeMember];
+}
+
+// 取得所有已勾選顯示的成員數據列表
+function getSelectedMembers() {
+  return DB.selectedMembersForView.filter(name => DB.members[name]);
+}
+
+// 計算勾選成員的合併財務數據
+function calculateCombined(memberNames) {
+  let combined = {
+    cash: 0,
+    properties: [],
+    stocks: [],
+    incomes: [],
+    expenses: [],
+    policies: []
+  };
+
+  memberNames.forEach(mName => {
+    const m = DB.members[mName];
+    if (m) {
+      combined.cash += Number(m.cash || 0);
+      combined.properties.push(...m.properties);
+      combined.stocks.push(...m.stocks);
+      combined.incomes.push(...m.incomes);
+      combined.expenses.push(...m.expenses);
+      combined.policies.push(...m.policies);
+    }
+  });
+
+  const S = combined;
+  const totalPropVal = S.properties.reduce((s, p) => s + Number(p.price || 0), 0);
+  const totalPropLoan = S.properties.reduce((s, p) => s + Number(p.mortgageLoan || 0), 0);
+  const totalPropPmt = S.properties.reduce((s, p) => s + Number(p.pmt || 0), 0);
+  const totalPropRent = S.properties.reduce((s, p) => s + Number(p.rent || 0), 0);
+  
+  const totalStockInitial = S.stocks.reduce((s, st) => s + Number(st.initial || 0), 0);
+  const currentAnnualDiv = S.stocks.reduce((s, st) => s + (Number(st.initial || 0) * (Number(st.divYield || 0) / 100)), 0);
+  const currentMonthlyDiv = currentAnnualDiv / 12;
+
+  const otherIncome = S.incomes.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const totalMonthlyIncome = otherIncome + totalPropRent + currentMonthlyDiv;
+
+  const livingExpense = S.expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const insuranceExpense = S.policies.reduce((s, p) => s + (p.freq === "yearly" ? Number(p.premium || 0)/12 : Number(p.premium || 0)), 0);
+  const totalMonthlyExpense = livingExpense + insuranceExpense + totalPropPmt;
+
+  const totalAssets = S.cash + totalPropVal + totalStockInitial;
+  const totalLiabilities = totalPropLoan;
+  const netWorth = totalAssets - totalLiabilities;
+  const netMonthlyCashflow = totalMonthlyIncome - totalMonthlyExpense;
+
+  const swr = Number($("fireSWR")?.value || 4) / 100;
+  const fireTarget = (totalMonthlyExpense * 12) / swr;
+  const currentPassiveMonthly = totalPropRent + currentMonthlyDiv;
+  const passiveCoverage = totalMonthlyExpense > 0 ? (currentPassiveMonthly / totalMonthlyExpense) * 100 : 0;
+
+  return {
+    totalPropVal, totalPropLoan, totalPropPmt, totalPropRent,
+    totalStockInitial, currentMonthlyDiv, totalMonthlyIncome,
+    livingExpense, insuranceExpense, totalMonthlyExpense,
+    totalAssets, totalLiabilities, netWorth, netMonthlyCashflow,
+    fireTarget, currentPassiveMonthly, passiveCoverage,
+    cash: S.cash
+  };
+}
+
+// 渲染成員控制控制列（選單、改名、刪除、復原、勾選）
+function renderMemberControls() {
+  const memberKeys = Object.keys(DB.members);
+
+  // 1. 下拉編輯成員選單
+  const select = $("memberSelect");
+  select.innerHTML = "";
+  memberKeys.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    if (m === DB.activeMember) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  // 2. 勾選框（合併檢視成員）
+  const cbContainer = $("combinationCheckboxes");
+  cbContainer.innerHTML = "";
+  memberKeys.forEach(m => {
+    const lbl = document.createElement("label");
+    const isChecked = DB.selectedMembersForView.includes(m);
+    lbl.style.cssText = "display:flex;align-items:center;gap:4px;cursor:pointer";
+    lbl.innerHTML = `<input type="checkbox" value="${m}" ${isChecked ? 'checked' : ''}> ${m}`;
+    lbl.querySelector("input").onchange = (e) => {
+      if (e.target.checked) {
+        if (!DB.selectedMembersForView.includes(m)) DB.selectedMembersForView.push(m);
+      } else {
+        DB.selectedMembersForView = DB.selectedMembersForView.filter(x => x !== m);
+      }
+      saveData();
+      render();
+    };
+    cbContainer.appendChild(lbl);
+  });
+
+  // 3. 回收桶 (Trash) 下拉選單與復原按鈕
+  const trashKeys = Object.keys(DB.trash || {});
+  const trashSelect = $("trashSelect");
+  const restoreBtn = $("restoreMemberBtn");
+
+  if (trashKeys.length > 0) {
+    trashSelect.style.display = "inline-block";
+    restoreBtn.style.display = "inline-block";
+    trashSelect.innerHTML = trashKeys.map(k => `<option value="${k}">${k} (已刪除)</option>`).join("");
+  } else {
+    trashSelect.style.display = "none";
+    restoreBtn.style.display = "none";
+  }
+}
+
+// 主渲染邏輯
+function render() {
+  const selectedMembers = getSelectedMembers();
+  const C = calculateCombined(selectedMembers);
+
+  $("summaryTitle").textContent = `組合資產總覽 (${selectedMembers.join(" + ") || "未選擇成員"})`;
+
+  // --- 1. 總覽 Dashboard ---
+  $("summaryKPIs").innerHTML = `
+    <div class="kpi"><div class="label">總資產 (Assets)</div><div class="value good">${money(C.totalAssets)}</div><div class="sub">現金+物業+股票</div></div>
+    <div class="kpi"><div class="label">總負債 (Liabilities)</div><div class="value bad">${money(C.totalLiabilities)}</div><div class="sub">按揭總額</div></div>
+    <div class="kpi"><div class="label">資產淨值 (Net Worth)</div><div class="value">${money(C.netWorth)}</div><div class="sub">資產減去負債</div></div>
+    <div class="kpi"><div class="label">被動收入覆蓋率</div><div class="value ${C.passiveCoverage>=100?'good':'bad'}">${C.passiveCoverage.toFixed(1)}%</div></div>
+  `;
+
+  $("cashflowKPIs").innerHTML = `
+    <div class="kpi"><div class="label">每月總收入</div><div class="value good">${money(C.totalMonthlyIncome)}</div></div>
+    <div class="kpi"><div class="label">每月總支出</div><div class="value bad">${money(C.totalMonthlyExpense)}</div></div>
+    <div class="kpi"><div class="label">每月淨儲蓄 / 現金流</div><div class="value ${C.netMonthlyCashflow>=0?'good':'bad'}">${money(C.netMonthlyCashflow)}</div></div>
+    <div class="kpi"><div class="label">每月被動收入</div><div class="value good">${money(C.currentPassiveMonthly)}</div></div>
+  `;
+
+  const astTotal = C.totalAssets || 1;
+  $("assetBars").innerHTML = `
+    <div class="bar-row"><span>🏠 物業價值</span><div class="bar"><i style="width:${(C.totalPropVal/astTotal*100)}%"></i></div><span>${money(C.totalPropVal)}</span></div>
+    <div class="bar-row"><span>📈 股票組合</span><div class="bar"><i style="width:${(C.totalStockInitial/astTotal*100)}%;background:#10b981"></i></div><span>${money(C.totalStockInitial)}</span></div>
+    <div class="bar-row"><span>💵 銀行現金</span><div class="bar"><i style="width:${(C.cash/astTotal*100)}%;background:#f59e0b"></i></div><span>${money(C.cash)}</span></div>
+  `;
+
+  // --- 2. 銀行現金列表（顯示已選成員） ---
+  $("cashBalancesContainer").innerHTML = selectedMembers.map(mName => `
+    <label class="field">
+      <span>${mName} 的銀行現金 ($)</span>
+      <input type="number" value="${DB.members[mName].cash || 0}" onchange="updateMemberCash('${mName}', Number(this.value))">
+    </label>
+  `).join("");
+
+  // --- 3. 跨成員資料列表渲染 Helper ---
+  const renderMultiMemberTable = (key, headersHTML, rowFormatter) => {
+    let rowsHTML = "";
+    selectedMembers.forEach(mName => {
+      const list = DB.members[mName][key] || [];
+      list.forEach((item, idx) => {
+        rowsHTML += rowFormatter(mName, item, idx);
+      });
+    });
+    if (!rowsHTML) rowsHTML = `<tr><td colspan="10" style="text-align:center;color:var(--muted)">暫無資料 (請點擊右上角新增)</td></tr>`;
+    return `<table><thead><tr><th>成員</th>${headersHTML}<th>操作</th></tr></thead><tbody>${rowsHTML}</tbody></table>`;
+  };
+
+  // --- 4. 物業列表 ---
+  $("propertyTable").innerHTML = renderMultiMemberTable(
+    "properties",
+    `<th>物業名稱</th><th>估計市值 ($)</th><th>按揭餘額 ($)</th><th>供樓 ($)</th><th>租金收入 ($)</th>`,
+    (mName, p, idx) => `
+      <tr>
+        <td><span class="owner-tag">${mName}</span></td>
+        <td><input type="text" value="${p.name}" onchange="updateItem('${mName}', 'properties', ${idx}, 'name', this.value)"></td>
+        <td><input type="number" value="${p.price}" onchange="updateItem('${mName}', 'properties', ${idx}, 'price', Number(this.value))"></td>
+        <td><input type="number" value="${p.mortgageLoan}" onchange="updateItem('${mName}', 'properties', ${idx}, 'mortgageLoan', Number(this.value))"></td>
+        <td><input type="number" value="${p.pmt}" onchange="updateItem('${mName}', 'properties', ${idx}, 'pmt', Number(this.value))"></td>
+        <td><input type="number" value="${p.rent}" onchange="updateItem('${mName}', 'properties', ${idx}, 'rent', Number(this.value))"></td>
+        <td><button class="danger" onclick="removeItem('${mName}', 'properties', ${idx})">刪除</button></td>
+      </tr>
+    `
+  );
+
+  // --- 5. 股票列表 ---
+  $("stockTable").innerHTML = renderMultiMemberTable(
+    "stocks",
+    `<th>股票名稱</th><th>持股本金 ($)</th><th>每月投入 ($)</th><th>股息率 %</th><th>預期增長 %</th>`,
+    (mName, st, idx) => `
+      <tr>
+        <td><span class="owner-tag">${mName}</span></td>
+        <td><input type="text" value="${st.name}" onchange="updateItem('${mName}', 'stocks', ${idx}, 'name', this.value)"></td>
+        <td><input type="number" value="${st.initial}" onchange="updateItem('${mName}', 'stocks', ${idx}, 'initial', Number(this.value))"></td>
+        <td><input type="number" value="${st.monthly}" onchange="updateItem('${mName}', 'stocks', ${idx}, 'monthly', Number(this.value))"></td>
+        <td><input type="number" value="${st.divYield}" step="0.1" onchange="updateItem('${mName}', 'stocks', ${idx}, 'divYield', Number(this.value))"></td>
+        <td><input type="number" value="${st.priceGrowth}" step="0.1" onchange="updateItem('${mName}', 'stocks', ${idx}, 'priceGrowth', Number(this.value))"></td>
+        <td><button class="danger" onclick="removeItem('${mName}', 'stocks', ${idx})">刪除</button></td>
+      </tr>
+    `
+  );
+
+  // --- 6. 收入列表 ---
+  $("incomeTable").innerHTML = renderMultiMemberTable(
+    "incomes",
+    `<th>收入來源</th><th>類別</th><th>每月金額 ($)</th>`,
+    (mName, inc, idx) => `
+      <tr>
+        <td><span class="owner-tag">${mName}</span></td>
+        <td><input type="text" value="${inc.name}" onchange="updateItem('${mName}', 'incomes', ${idx}, 'name', this.value)"></td>
+        <td>
+          <select onchange="updateItem('${mName}', 'incomes', ${idx}, 'category', this.value)">
+            <option value="active" ${inc.category==='active'?'selected':''}>主動薪金</option>
+            <option value="business" ${inc.category==='business'?'selected':''}>生意利潤</option>
+          </select>
+        </td>
+        <td><input type="number" value="${inc.amount}" onchange="updateItem('${mName}', 'incomes', ${idx}, 'amount', Number(this.value))"></td>
+        <td><button class="danger" onclick="removeItem('${mName}', 'incomes', ${idx})">刪除</button></td>
+      </tr>
+    `
+  );
+
+  // --- 7. 支出列表 ---
+  $("expenseTable").innerHTML = renderMultiMemberTable(
+    "expenses",
+    `<th>支出項目</th><th>每月預估 ($)</th>`,
+    (mName, exp, idx) => `
+      <tr>
+        <td><span class="owner-tag">${mName}</span></td>
+        <td><input type="text" value="${exp.name}" onchange="updateItem('${mName}', 'expenses', ${idx}, 'name', this.value)"></td>
+        <td><input type="number" value="${exp.amount}" onchange="updateItem('${mName}', 'expenses', ${idx}, 'amount', Number(this.value))"></td>
+        <td><button class="danger" onclick="removeItem('${mName}', 'expenses', ${idx})">刪除</button></td>
+      </tr>
+    `
+  );
+
+  // --- 8. 保險列表 (正規化 + Description Box) ---
+  $("policyTable").innerHTML = renderMultiMemberTable(
+    "policies",
+    `<th>保單名稱</th><th>保險公司</th><th>保單類型</th><th>受保人</th><th>保費 ($)</th><th>繳費頻率</th><th>用途 / 細節備註 (Description)</th>`,
+    (mName, pol, idx) => `
+      <tr>
+        <td><span class="owner-tag">${mName}</span></td>
+        <td><input type="text" value="${pol.name||''}" onchange="updateItem('${mName}', 'policies', ${idx}, 'name', this.value)"></td>
+        <td><input type="text" value="${pol.company||''}" placeholder="例如: AIA / 保誠" onchange="updateItem('${mName}', 'policies', ${idx}, 'company', this.value)"></td>
+        <td><input type="text" value="${pol.type||''}" placeholder="例如: 醫療/重疾/壽險" onchange="updateItem('${mName}', 'policies', ${idx}, 'type', this.value)"></td>
+        <td><input type="text" value="${pol.insured||mName}" onchange="updateItem('${mName}', 'policies', ${idx}, 'insured', this.value)"></td>
+        <td><input type="number" value="${pol.premium||0}" onchange="updateItem('${mName}', 'policies', ${idx}, 'premium', Number(this.value))"></td>
+        <td>
+          <select onchange="updateItem('${mName}', 'policies', ${idx}, 'freq', this.value)">
+            <option value="monthly" ${pol.freq==='monthly'?'selected':''}>每月</option>
+            <option value="yearly" ${pol.freq==='yearly'?'selected':''}>每年</option>
+          </select>
+        </td>
+        <td><textarea placeholder="例如：住院全數賠償，自付額 $10,000..." onchange="updateItem('${mName}', 'policies', ${idx}, 'desc', this.value)">${pol.desc||''}</textarea></td>
+        <td><button class="danger" onclick="removeItem('${mName}', 'policies', ${idx})">刪除</button></td>
+      </tr>
+    `
+  );
+
+  // --- 9. FIRE 數據 ---
+  $("fireSummary").innerHTML = `
+    <div class="kpi"><div class="label">每月總支出需求</div><div class="value bad">${money(C.totalMonthlyExpense)}</div></div>
+    <div class="kpi"><div class="label">FIRE 目標總資產</div><div class="value good">${money(C.fireTarget)}</div><div class="sub">基於 ${$("fireSWR").value}% 提取率</div></div>
+    <div class="kpi"><div class="label">目前累積生息資產</div><div class="value">${money(C.totalPropVal + C.totalStockInitial + C.cash)}</div></div>
+    <div class="kpi"><div class="label">距離 FIRE 差額</div><div class="value ${(C.totalAssets - C.fireTarget)>=0?'good':'bad'}">${money(C.totalAssets - C.fireTarget)}</div></div>
+  `;
+}
+
+// 全局數據更新 Helpers
+window.updateMemberCash = function(mName, value) {
+  if (DB.members[mName]) {
+    DB.members[mName].cash = value;
+    saveData();
+    render();
+  }
+};
+
+window.updateItem = function(mName, listKey, index, field, value) {
+  if (DB.members[mName] && DB.members[mName][listKey][index]) {
+    DB.members[mName][listKey][index][field] = value;
+    saveData();
+    render();
+  }
+};
+
+window.removeItem = function(mName, listKey, index) {
+  if (DB.members[mName] && DB.members[mName][listKey]) {
+    DB.members[mName][listKey].splice(index, 1);
+    saveData();
+    render();
+  }
+};
+
+// 新增項目至「當前選擇成員」的名下
+function addItemToActiveMember(listKey, defaultObj) {
+  const m = getActiveMemberData();
+  if (m) {
+    if (!m[listKey]) m[listKey] = [];
+    m[listKey].push(defaultObj);
+    saveData();
+    render();
+  }
+}
+
+$("addPropertyBtn").onclick = () => addItemToActiveMember('properties', { name: "新物業", price: 0, mortgageLoan: 0, pmt: 0, rent: 0 });
+$("addStockBtn").onclick = () => addItemToActiveMember('stocks', { name: "新股票", initial: 0, monthly: 0, divYield: 0, priceGrowth: 0 });
+$("addIncomeBtn").onclick = () => addItemToActiveMember('incomes', { name: "新收入", category: "active", amount: 0 });
+$("addExpenseBtn").onclick = () => addItemToActiveMember('expenses', { name: "新支出", amount: 0 });
+$("addPolicyBtn").onclick = () => addItemToActiveMember('policies', { name: "新保單", company: "", type: "", insured: DB.activeMember, premium: 0, freq: "monthly", desc: "" });
+
+// FIRE 安全提取率輸入變動
+$("fireSWR").oninput = () => { render(); };
+
+// --- 成員管理：新增 / 重命名 / 刪除 / 復原 ---
+$("memberSelect").onchange = (e) => {
+  DB.activeMember = e.target.value;
+  saveData();
+  render();
+};
+
+$("addMemberBtn").onclick = () => {
+  const name = prompt("請輸入新成員名稱 (例如：孩子 C / 父母 D)：");
+  if (name && name.trim()) {
+    const trimmed = name.trim();
+    if (DB.members[trimmed]) {
+      alert("成員名稱已存在！");
+      return;
+    }
+    DB.members[trimmed] = createDefaultMember(trimmed);
+    DB.activeMember = trimmed;
+    if (!DB.selectedMembersForView.includes(trimmed)) {
+      DB.selectedMembersForView.push(trimmed);
+    }
+    saveData();
+    renderMemberControls();
+    render();
+  }
+};
+
+$("renameMemberBtn").onclick = () => {
+  const oldName = DB.activeMember;
+  const newName = prompt(`請輸入成員「${oldName}」的新名稱：`, oldName);
+  if (newName && newName.trim() && newName.trim() !== oldName) {
+    const trimmed = newName.trim();
+    if (DB.members[trimmed]) {
+      alert("該名稱已由其他成員使用！");
+      return;
+    }
+    // 複製資料並更新名稱
+    DB.members[trimmed] = DB.members[oldName];
+    delete DB.members[oldName];
+    
+    // 更新勾選清單與 activeMember
+    DB.selectedMembersForView = DB.selectedMembersForView.map(m => m === oldName ? trimmed : m);
+    DB.activeMember = trimmed;
+
+    saveData();
+    renderMemberControls();
+    render();
+  }
+};
+
+$("deleteMemberBtn").onclick = () => {
+  const name = DB.activeMember;
+  const memberKeys = Object.keys(DB.members);
+  if (memberKeys.length <= 1) {
+    alert("系統必須保留最少一個成員 Profile！");
+    return;
+  }
+  if (confirm(`確定要將成員「${name}」移至回收桶嗎？`)) {
+    // 移入 Trash 備份
+    if (!DB.trash) DB.trash = {};
+    DB.trash[name] = DB.members[name];
+    delete DB.members[name];
+
+    // 從勾選清單移除
+    DB.selectedMembersForView = DB.selectedMembersForView.filter(m => m !== name);
+    DB.activeMember = Object.keys(DB.members)[0];
+
+    saveData();
+    renderMemberControls();
+    render();
+  }
+};
+
+$("restoreMemberBtn").onclick = () => {
+  const trashSelect = $("trashSelect");
+  const restoreName = trashSelect.value;
+  if (restoreName && DB.trash && DB.trash[restoreName]) {
+    DB.members[restoreName] = DB.trash[restoreName];
+    delete DB.trash[restoreName];
+
+    if (!DB.selectedMembersForView.includes(restoreName)) {
+      DB.selectedMembersForView.push(restoreName);
+    }
+    DB.activeMember = restoreName;
+
+    saveData();
+    renderMemberControls();
+    render();
+    alert(`成員「${restoreName}」已成功復原！`);
+  }
+};
+
+$("resetBtn").onclick = () => {
+  if (confirm("確定要重設所有成員與財務數據為預設值嗎？此動作無法復原。")) {
+    DB = JSON.parse(JSON.stringify(defaultRootData));
+    saveData();
+    renderMemberControls();
+    render();
+  }
+};
+
+// --- Google Drive API 雲端同步 ---
+$("saveDriveBtn").onclick = async () => {
+  if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT")) {
+    alert("請先在 HTML 頂部的 GAS_API_URL 變數填入你的 Google Apps Script URL！");
+    return;
+  }
+  $("saveStatus").textContent = "⏳ 備份至 Google Drive 中...";
+  try {
+    const res = await fetch(GAS_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "save", payload: DB })
+    });
+    const result = await res.json();
+    if (result.status === "success") {
+      $("saveStatus").textContent = "✓ 已成功同步至 Drive！";
+    } else {
+      $("saveStatus").textContent = "❌ 失敗：" + result.message;
+    }
+  } catch (err) {
+    $("saveStatus").textContent = "❌ 連線失敗";
+  }
+  setTimeout(() => $("saveStatus").textContent = "", 3000);
+};
+
+$("loadDriveBtn").onclick = async () => {
+  if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT")) {
+    alert("請先在 HTML 頂部的 GAS_API_URL 變數填入你的 Google Apps Script URL！");
+    return;
+  }
+  $("saveStatus").textContent = "⏳ 從 Drive 載入中...";
+  try {
+    const res = await fetch(GAS_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "load" })
+    });
+    const result = await res.json();
+    if (result.status === "success" && result.payload) {
+      DB = result.payload;
+      if (!DB.trash) DB.trash = {};
+      saveData();
+      renderMemberControls();
+      render();
+      $("saveStatus").textContent = "✓ 成功載入！";
+    } else {
+      $("saveStatus").textContent = "❌ 讀取失敗或無檔案";
+    }
+  } catch (err) {
+    $("saveStatus").textContent = "❌ 連線失敗";
+  }
+  setTimeout(() => $("saveStatus").textContent = "", 3000);
+};
+
+// Tab 切換控制
+document.querySelectorAll("[data-tab]").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll("[data-tab]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    $(btn.dataset.tab).classList.add("active");
+  };
+});
+
+// 初始化
+renderMemberControls();
+render();
+})();
+</script>
+</body>
+</html>
