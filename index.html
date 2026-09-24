@@ -716,56 +716,219 @@ $("resetBtn").onclick = () => {
   }
 };
 
-// --- Google Drive API 雲端同步 ---
-$("saveDriveBtn").onclick = async () => {
-  if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT")) {
-    alert("請先在 HTML 頂部的 GAS_API_URL 變數填入你的 Google Apps Script URL！");
-    return;
+// --- Google Drive API 雲端同步：診斷版 ---
+
+// 只留在目前頁面記憶體，唔存入 localStorage 或 DB
+let driveApiKey = "";
+let driveBusy = false;
+
+function setDriveBusy(busy) {
+  driveBusy = busy;
+  $("saveDriveBtn").disabled = busy;
+  $("loadDriveBtn").disabled = busy;
+}
+
+async function callDriveAPI(action, payload) {
+  if (
+    !GAS_API_URL ||
+    !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(
+      GAS_API_URL.trim()
+    )
+  ) {
+    throw new Error("請填寫正確 Apps Script /exec 部署網址");
   }
-  $("saveStatus").textContent = "⏳ 備份至 Google Drive 中...";
-  try {
-    const res = await fetch(GAS_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ action: "save", payload: DB })
-    });
-    const result = await res.json();
-    if (result.status === "success") {
-      $("saveStatus").textContent = "✓ 已成功同步至 Drive！";
-    } else {
-      $("saveStatus").textContent = "❌ 失敗：" + result.message;
+
+  if (!driveApiKey) {
+    const entered = prompt("請輸入你設定嘅 API_KEY 連線密鑰：");
+
+    if (!entered || !entered.trim()) {
+      throw new Error("已取消連線");
     }
-  } catch (err) {
-    $("saveStatus").textContent = "❌ 連線失敗";
+
+    driveApiKey = entered.trim();
   }
-  setTimeout(() => $("saveStatus").textContent = "", 3000);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const response = await fetch(GAS_API_URL.trim(), {
+      method: "POST",
+
+      // JSON 內容以純文字傳送，後端仍然使用 JSON.parse
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+
+      redirect: "follow",
+      credentials: "omit",
+      signal: controller.signal,
+
+      body: JSON.stringify({
+        action,
+        apiKey: driveApiKey,
+        ...(action === "save" ? { payload } : {})
+      })
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(
+        "HTTP " + response.status +
+        "：請檢查部署權限及 Apps Script 執行記錄"
+      );
+    }
+
+    let result;
+
+    try {
+      result = JSON.parse(text);
+    } catch {
+      // 不把整份回應印出，以免意外記錄敏感資料
+      throw new Error(
+        "伺服器回傳唔係 JSON，可能係登入頁、權限頁或部署錯誤頁。" +
+        "請到 Network 檢查回應類型。"
+      );
+    }
+
+    if (!result || result.status !== "success") {
+      if (result && result.code === "UNAUTHORIZED") {
+        driveApiKey = "";
+      }
+
+      throw new Error(
+        result && result.message
+          ? result.message
+          : "伺服器回應格式不正確"
+      );
+    }
+
+    return result;
+
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(
+        "等候超過 45 秒。儲存可能已在伺服器完成；" +
+        "請先检查 Drive 檔案，唔好立即重複覆蓋。"
+      );
+    }
+
+    throw error;
+
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function checkLoadedDB(data) {
+  if (
+    !data ||
+    !data.members ||
+    typeof data.members !== "object" ||
+    Array.isArray(data.members) ||
+    !Array.isArray(data.selectedMembersForView) ||
+    typeof data.activeMember !== "string" ||
+    !Object.prototype.hasOwnProperty.call(
+      data.members,
+      data.activeMember
+    )
+  ) {
+    throw new Error("雲端資料結構不正確，未覆蓋本機資料");
+  }
+
+  for (const member of Object.values(data.members)) {
+    for (const key of [
+      "properties", "stocks", "incomes", "expenses", "policies"
+    ]) {
+      if (!member || !Array.isArray(member[key])) {
+        throw new Error("雲端成員資料不完整，未覆蓋本機資料");
+      }
+    }
+  }
+
+  if (!data.trash) data.trash = {};
+
+  if (typeof data.trash !== "object" || Array.isArray(data.trash)) {
+    throw new Error("雲端回收桶格式不正確");
+  }
+
+  return data;
+}
+
+function showDriveError(error, action) {
+  console.error("[Drive " + action + "]", error);
+  $("saveStatus").textContent = "❌ " + error.message;
+}
+
+$("saveDriveBtn").onclick = async () => {
+  if (driveBusy) return;
+
+  if (!confirm(
+    "會用目前本機全部成員資料覆蓋雲端整份資料，是否繼續？"
+  )) return;
+
+  setDriveBusy(true);
+  $("saveStatus").textContent = "⏳ 正在儲存至 Drive…";
+
+  try {
+    // 固定本次快照；連線期間再修改嘅內容不屬於本次儲存
+    const snapshot = JSON.parse(JSON.stringify(DB));
+
+    await callDriveAPI("save", snapshot);
+
+    $("saveStatus").textContent =
+      "✓ 已儲存按下按鈕時嘅資料快照；之後修改請再儲存。";
+
+  } catch (error) {
+    showDriveError(error, "save");
+
+  } finally {
+    setDriveBusy(false);
+  }
 };
 
 $("loadDriveBtn").onclick = async () => {
-  if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT")) {
-    alert("請先在 HTML 頂部的 GAS_API_URL 變數填入你的 Google Apps Script URL！");
-    return;
-  }
-  $("saveStatus").textContent = "⏳ 從 Drive 載入中...";
+  if (driveBusy) return;
+
+  setDriveBusy(true);
+  $("saveStatus").textContent = "⏳ 正在讀取 Drive…";
+
   try {
-    const res = await fetch(GAS_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ action: "load" })
-    });
-    const result = await res.json();
-    if (result.status === "success" && result.payload) {
-      DB = result.payload;
-      if (!DB.trash) DB.trash = {};
-      saveData();
-      renderMemberControls();
-      render();
-      $("saveStatus").textContent = "✓ 成功載入！";
-    } else {
-      $("saveStatus").textContent = "❌ 讀取失敗或無檔案";
+    const result = await callDriveAPI("load");
+
+    if (result.payload === null) {
+      $("saveStatus").textContent =
+        "雲端未有資料。請確認本機資料後先儲存一次。";
+      return;
     }
-  } catch (err) {
-    $("saveStatus").textContent = "❌ 連線失敗";
+
+    const loaded = checkLoadedDB(result.payload);
+
+    // 讀取完才確認，避免連線期間輸入嘅內容被靜默覆蓋
+    if (!confirm(
+      "已讀取雲端資料。確定取代目前本機全部資料？" +
+      "未儲存到雲端嘅修改將會失去。"
+    )) {
+      $("saveStatus").textContent = "已取消取代本機資料";
+      return;
+    }
+
+    // 本機儲存失敗時，不先改變記憶體中嘅 DB
+    localStorage.setItem(KEY, JSON.stringify(loaded));
+
+    DB = loaded;
+    renderMemberControls();
+    render();
+
+    $("saveStatus").textContent = "✓ 已從 Drive 載入";
+
+  } catch (error) {
+    showDriveError(error, "load");
+
+  } finally {
+    setDriveBusy(false);
   }
-  setTimeout(() => $("saveStatus").textContent = "", 3000);
 };
 
 // Tab 切換控制
